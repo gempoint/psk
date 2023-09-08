@@ -1,7 +1,13 @@
 use regex::Regex;
 use reqwest::header::USER_AGENT;
+use rustube::{block, Id, VideoDetails, VideoFetcher};
+use unescape::unescape;
+use url::Url;
 
-use crate::types::DownloadableVideo;
+use crate::{
+    extras::{remove_quotes, stripslashes},
+    types::DownloadableVideo,
+};
 
 pub fn insta(x: String) -> Result<DownloadableVideo, String> {
     // translated code from https://github.com/IshanJaiswal99/instagram-get-url/blob/master/src/index.js
@@ -25,19 +31,23 @@ pub fn insta(x: String) -> Result<DownloadableVideo, String> {
             println!("{}", serde_json::to_string(&json).unwrap());
             if json["graphql"].is_object() {
                 return Ok(DownloadableVideo {
-                    title: json["graphql"]["shortcode_media"]["id"].to_string(),
+                    title: remove_quotes(&json["graphql"]["shortcode_media"]["id"].to_string()),
                     views: json["graphql"]["shortcode_media"]["video_view_count"].as_i64(),
-                    description: Some(
-                        json["graphql"]["shortcode_media"]["edge_media_to_caption"]["edges"][0]
+                    description: remove_quotes(
+                        &json["graphql"]["shortcode_media"]["edge_media_to_caption"]["edges"][0]
                             ["node"]["text"]
                             .to_string(),
                     ),
-                    thumbnail: Some(
-                        json["graphql"]["shortcode_media"]["thumbnail_src"].to_string(),
-                    ),
-                    url: json["graphql"]["shortcode_media"]["video_url"].to_string(),
+                    thumbnail: Some(remove_quotes(
+                        &json["graphql"]["shortcode_media"]["thumbnail_src"].to_string(),
+                    )),
+                    url: Some(remove_quotes(
+                        &json["graphql"]["shortcode_media"]["video_url"].to_string(),
+                    )),
                     duration: None,
-                    uploader: json["graphql"]["shortcode_media"]["owner"]["username"].to_string(),
+                    uploader: remove_quotes(
+                        &json["graphql"]["shortcode_media"]["owner"]["username"].to_string(),
+                    ),
                 });
             } else {
                 return Err(format!("unknown error: {}", json["message"]));
@@ -86,18 +96,63 @@ pub fn tiktok(x: String) -> Result<DownloadableVideo, String> {
         Err(e) => return Err(e.to_string()),
         Ok(res) => {
             println!("good");
-            let json = res.json::<serde_json::Value>().unwrap();
-            println!("{}", serde_json::to_string(&json).unwrap());
+            let txt = res.text().unwrap();
+            println!("t: {}", txt);
+            let txt_fixed = stripslashes(&txt).expect("stripslashes failed");
+            //let json = res.json::<serde_json::Value>().unwrap();
+            //let json: serde_json::Value = serde_json::from_str(&txt_fixed).unwrap();
+            let json: serde_json::Value = serde_json::from_str(&txt).unwrap();
+            //println!("{}", serde_json::to_string(&json).unwrap());
             let video_data = &json["aweme_list"][0];
-            return Ok(DownloadableVideo {
-                title: video_data["aweme_id"].to_string(),
-                description: Some(video_data["desc"].to_string()),
+            let um = &video_data["aweme_id"].to_string();
+            println!("{}", um);
+            //println!("{}", unescape(um).unwrap());
+            //println!(
+            //    "{}",
+            //    remove_quotes(&video_data["video"]["play_addr"]["url_list"][0].to_string())
+            //);
+            let end_result = DownloadableVideo {
+                title: remove_quotes(um),
+                description: remove_quotes(&video_data["desc"].to_string()),
                 views: video_data["statistics"]["play_count"].as_i64(),
-                thumbnail: Some(video_data["video"]["origin_cover"]["url_list"][0].to_string()),
-                url: video_data["video"]["play_addr"]["url_list"][0].to_string(),
+                thumbnail: Some(remove_quotes(
+                    &video_data["video"]["origin_cover"]["url_list"][0].to_string(),
+                )),
+                url: Some(remove_quotes(
+                    &video_data["video"]["play_addr"]["url_list"][0].to_string(),
+                )),
                 duration: None,
-                uploader: video_data["author"]["nickname"].to_string(),
-            });
+                uploader: remove_quotes(&video_data["author"]["nickname"].to_string()),
+            };
+            println!("{:?}", end_result);
+            return Ok(end_result);
         }
+    }
+}
+
+pub fn yt(x: String) -> Result<DownloadableVideo, String> {
+    //let id = Id::from_string(x);
+    match Url::parse(&x) {
+        Ok(x) => match VideoFetcher::from_url(&x) {
+            Ok(x) => match block!(x.fetch()) {
+                Ok(x) => {
+                    let details = x.video_details();
+                    let end_result = Ok(DownloadableVideo {
+                        title: x.video_title().to_string(),
+                        description: details.short_description.clone(),
+                        views: Some(TryInto::<i64>::try_into(details.view_count).unwrap()),
+                        thumbnail: Some(details.thumbnails[0].url.clone()),
+                        url: None,
+                        duration: None,
+                        uploader: details.author.clone(),
+                    });
+                    println!("{:?}", end_result);
+                    end_result
+                }
+                Err(err) => Err(err.to_string()),
+            },
+            Err(err) => Err(err.to_string()),
+        },
+        Err(err) => Err(err.to_string()),
     }
 }
