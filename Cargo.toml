@@ -27,7 +27,7 @@ unescape = "0.1.0"
 opener = {version = "0.6.1", features = ["reveal"]}
 open = "5.0.0"
 url = "2.4.1"
-
+rusty_ytdl = { git = "https://github.com/gempoint/rusty_ytdl" }
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
 native-dialog = "0.6.4"
