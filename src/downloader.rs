@@ -1,13 +1,10 @@
-use regex::Regex;
-use reqwest::header::USER_AGENT;
-use rustube::{block, Id, VideoDetails, VideoFetcher};
-use unescape::unescape;
-use url::Url;
-
 use crate::{
     extras::{remove_quotes, stripslashes},
     types::DownloadableVideo,
 };
+use regex::Regex;
+use reqwest::header::USER_AGENT;
+use rusty_ytdl::{block_async, Video};
 
 pub fn insta(x: String) -> Result<DownloadableVideo, String> {
     // translated code from https://github.com/IshanJaiswal99/instagram-get-url/blob/master/src/index.js
@@ -131,26 +128,20 @@ pub fn tiktok(x: String) -> Result<DownloadableVideo, String> {
 }
 
 pub fn yt(x: String) -> Result<DownloadableVideo, String> {
-    //let id = Id::from_string(x);
-    match Url::parse(&x) {
-        Ok(x) => match VideoFetcher::from_url(&x) {
-            Ok(x) => match block!(x.fetch()) {
-                Ok(x) => {
-                    let details = x.video_details();
-                    let end_result = Ok(DownloadableVideo {
-                        title: x.video_title().to_string(),
-                        description: details.short_description.clone(),
-                        views: Some(TryInto::<i64>::try_into(details.view_count).unwrap()),
-                        thumbnail: Some(details.thumbnails[0].url.clone()),
-                        url: None,
-                        duration: None,
-                        uploader: details.author.clone(),
-                    });
-                    println!("{:?}", end_result);
-                    end_result
-                }
-                Err(err) => Err(err.to_string()),
-            },
+    match Video::new(x) {
+        Ok(x) => match block_async!(x.get_info()) {
+            Ok(x) => {
+                let end_result = DownloadableVideo {
+                    title: x.video_details.title,
+                    views: Some(x.video_details.view_count.parse().unwrap()),
+                    description: x.video_details.description,
+                    url: None,
+                    thumbnail: Some(x.video_details.thumbnails.first().unwrap().url.clone()),
+                    duration: None,
+                    uploader: x.video_details.owner_channel_name,
+                };
+                Ok(end_result)
+            }
             Err(err) => Err(err.to_string()),
         },
         Err(err) => Err(err.to_string()),

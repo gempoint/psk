@@ -7,12 +7,15 @@ use num_format::{Locale, ToFormattedString};
 use opener::reveal;
 use poll_promise::Promise;
 use reqwest::{header::CONTENT_TYPE, Url};
-use rustube::{block, video_info::player_response::streaming_data::AudioQuality, VideoFetcher};
+use rusty_ytdl::{
+    block_async, DownloadOptions, RequestOptions, Video, VideoOptions, VideoQuality,
+    VideoSearchOptions,
+};
 
 use crate::{
     audio::convert,
     downloader::{insta, tiktok, yt},
-    extras::label_wrap,
+    extras::{error, label_wrap},
     types::Action,
     PSKGui,
 };
@@ -95,161 +98,118 @@ impl PSKGui {
             if self.img_ready {
                 self.show_image(ui);
             }
-            egui::ScrollArea::vertical().show(ui, |ui| {
-                match self.dwl_video.as_ref() {
-                    Some(dat) => {
-                        ui.horizontal(|ui| {
-                            ui.label("title:");
-                            label_wrap(ui, &dat.title);
-                        });
-                        ui.horizontal(|ui| {
-                            ui.label("description:");
-                            label_wrap(ui, &dat.description);
-                        });
-                        ui.horizontal(|ui| {
-                            label_wrap(ui, format!("made by {}", dat.uploader));
-                        });
-                        match &dat.views {
-                            Some(views) => {
-                                ui.horizontal(|ui| {
-                                    ui.label(format!(
-                                        "{} views",
-                                        views.to_formatted_string(&Locale::en)
-                                    ));
-                                });
-                            }
-                            None => {}
+            egui::ScrollArea::vertical().show(ui, |ui| match self.dwl_video.as_ref() {
+                Some(dat) => {
+                    ui.horizontal(|ui| {
+                        ui.label("title:");
+                        label_wrap(ui, &dat.title);
+                    });
+                    ui.horizontal(|ui| {
+                        ui.label("description:");
+                        label_wrap(ui, &dat.description);
+                    });
+                    ui.horizontal(|ui| {
+                        label_wrap(ui, format!("made by {}", dat.uploader));
+                    });
+                    match &dat.views {
+                        Some(views) => {
+                            ui.horizontal(|ui| {
+                                ui.label(format!(
+                                    "{} views",
+                                    views.to_formatted_string(&Locale::en)
+                                ));
+                            });
                         }
-                        let dwl_button = ui.button("download");
-                        if dwl_button.clicked() {
-                            if self.action != Action::Youtube {
-                                let chooser = FileDialog::new()
-                                    .set_location("~/Downloads/")
-                                    .set_filename(
-                                        format!(
-                                            "{}{}.mp3",
-                                            match self.action {
-                                                Action::Tiktok => "tik_",
-                                                Action::Instagram => "ig_",
-                                                _ => "",
-                                            },
-                                            &dat.title
-                                        )
-                                        .as_str(),
+                        None => {}
+                    }
+                    let dwl_button = ui.button("download");
+                    if dwl_button.clicked() {
+                        if self.action != Action::Youtube {
+                            let chooser = FileDialog::new()
+                                .set_location("~/Downloads/")
+                                .set_filename(
+                                    format!(
+                                        "{}{}.mp3",
+                                        match self.action {
+                                            Action::Tiktok => "tik_",
+                                            Action::Instagram => "ig_",
+                                            _ => "",
+                                        },
+                                        &dat.title
                                     )
-                                    .show_save_single_file();
+                                    .as_str(),
+                                )
+                                .show_save_single_file();
 
-                                match chooser {
-                                    Ok(x) => match x {
-                                        Some(x) => {
-                                            self.dwl_path = Some(x);
-                                            match reqwest::blocking::get(dat.url.clone().unwrap()) {
-                                                Ok(x) => {
-                                                    let mp3 = self.dwl_path.clone().unwrap();
-                                                    let mut mp4 = mp3.clone();
-                                                    mp4.set_extension("mp4");
-                                                    let mut file =
-                                                        std::fs::File::create(&mp4).unwrap();
-                                                    file.write_all(&x.bytes().unwrap()).unwrap();
-                                                    match convert(&mp4, &mp3) {
-                                                        Ok(mut x) => {
-                                                            x.wait();
-                                                            reveal(mp3);
-                                                        }
-                                                        Err(err) => {
-                                                            MessageDialog::new()
-                                                                .set_title("psk: converting error")
-                                                                .set_text(&format!(
-                                                                    "wasnt able to convert: {}",
-                                                                    err
-                                                                ))
-                                                                .show_alert()
-                                                                .unwrap();
-                                                        }
+                            match chooser {
+                                Ok(x) => match x {
+                                    Some(x) => {
+                                        self.dwl_path = Some(x);
+                                        match reqwest::blocking::get(dat.url.clone().unwrap()) {
+                                            Ok(x) => {
+                                                let mp3 = self.dwl_path.clone().unwrap();
+                                                let mut mp4 = mp3.clone();
+                                                mp4.set_extension("mp4");
+                                                let mut file = std::fs::File::create(&mp4).unwrap();
+                                                file.write_all(&x.bytes().unwrap()).unwrap();
+                                                match convert(&mp4, &mp3) {
+                                                    Ok(mut x) => {
+                                                        x.wait();
+                                                        reveal(mp3);
+                                                    }
+                                                    Err(err) => {
+                                                        MessageDialog::new()
+                                                            .set_title("psk: converting error")
+                                                            .set_text(&format!(
+                                                                "wasnt able to convert: {}",
+                                                                err
+                                                            ))
+                                                            .show_alert()
+                                                            .unwrap();
                                                     }
                                                 }
-                                                Err(e) => {
-                                                    println!("err: {}", e);
-                                                }
+                                            }
+                                            Err(e) => {
+                                                println!("err: {}", e);
                                             }
                                         }
-                                        None => return,
-                                    },
-                                    Err(err) => {
-                                        println!("error: {}", err);
                                     }
+                                    None => return,
+                                },
+                                Err(err) => {
+                                    println!("error: {}", err);
                                 }
-                            } else {
-                                let chooser = FileDialog::new()
-                                    .set_location("~/Downloads/")
-                                    .set_filename(format!("{}.mp3", &dat.title).as_str())
-                                    .show_save_single_file();
-                                match chooser {
-                                    Ok(x) => match x {
-                                        Some(path) => {
-                                            let mut mp4 = path.clone();
-                                            mp4.set_extension("mp4");
-                                            let fetch = VideoFetcher::from_url(
-                                                &Url::parse(&self.url).unwrap(),
-                                            )
+                            }
+                        } else {
+                            let chooser = FileDialog::new()
+                                .set_location("~/Downloads/")
+                                .set_filename(format!("{}.mp3", &dat.title).as_str())
+                                .show_save_single_file();
+                            match chooser {
+                                Ok(x) => match x {
+                                    Some(path) => {
+                                        let video_options = VideoOptions {
+                                            quality: VideoQuality::Lowest,
+                                            filter: VideoSearchOptions::Audio,
+                                            ..Default::default()
+                                        };
+                                        let vid = Video::new_with_options(&self.url, video_options)
                                             .unwrap();
-                                            let dat = block!(fetch.fetch()).unwrap();
-                                            match dat.descramble() {
-                                                Ok(x) => {
-                                                    //let mut _stream =
-                                                    //    x.streams().iter().filter(|stream| {
-                                                    //        stream.includes_audio_track
-                                                    //            && !stream.includes_video_track
-                                                    //    });
-                                                    //println!("{:#?}", _stream);
-                                                    ////println!("{}", _s)
-                                                    //let stream = _stream
-                                                    //    .find(|&x| {
-                                                    //        x.audio_quality
-                                                    //            == Some(AudioQuality::Medium)
-                                                    //    })
-                                                    //    .unwrap();
-                                                    let prom =
-                                                        Promise::spawn_thread("um", move || {
-                                                            let stream = x.best_audio().unwrap();
-                                                            println!("started downloading");
-                                                            match block!(
-                                                                stream.download_to(mp4.as_path())
-                                                            ) {
-                                                                Ok(x) => {
-                                                                    match convert(&mp4, &path) {
-                                                                        Ok(mut x) => {
-                                                                            x.wait();
-                                                                            reveal(path);
-                                                                        }
-                                                                        Err(err) => {
-                                                                            println!("1 {}", err)
-                                                                        }
-                                                                    }
-                                                                }
-                                                                Err(err) => println!("2 {}", err),
-                                                            }
-                                                        });
-                                                    if let Some(result) = prom.ready() {
-                                                        // Use/show result
-                                                    } else {
-                                                        ui.label("started downloading");
-                                                    }
-                                                }
-                                                Err(err) => {
-                                                    println!("{}", err);
-                                                }
+                                        match block_async!(vid.download(&path)) {
+                                            Ok(x) => {
+                                                reveal(path);
                                             }
+                                            Err(err) => error(&err.to_string()),
                                         }
-                                        None => todo!(),
-                                    },
-                                    Err(err) => println!("error: {}", err),
-                                }
+                                    }
+                                    None => {}
+                                },
+                                Err(err) => println!("error: {}", err),
                             }
                         }
                     }
-                    None => {}
                 }
+                None => {}
             });
         }
     }

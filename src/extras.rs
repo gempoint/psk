@@ -1,4 +1,5 @@
 use egui::{Ui, WidgetText};
+use native_dialog::{MessageDialog, MessageType};
 
 pub fn label_wrap(ui: &mut Ui, x: impl Into<WidgetText>) {
     ui.add(egui::Label::new(x).wrap(true));
@@ -36,4 +37,13 @@ pub fn remove_quotes(input: &str) -> String {
     result = result.replace("\\\"", "\"");
 
     result
+}
+
+pub fn error(message: &str) {
+    MessageDialog::new()
+        .set_type(MessageType::Error)
+        .set_title("psk: crash error")
+        .set_text(&format!("{:#?}", message))
+        .show_alert()
+        .unwrap();
 }
