@@ -1,7 +1,6 @@
 use egui::Ui;
 use egui_extras::RetainedImage;
 use poll_promise::Promise;
-use rustube::VideoFetcher;
 
 use crate::{
     downloader::{insta, tiktok},

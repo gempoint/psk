@@ -1,8 +1,9 @@
 [package]
 name = "psf"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
 rust-version = "1.65"
+description = "producer swiss knife"
 
 
 [dependencies]
@@ -13,7 +14,6 @@ eframe = { version = "0.22.0", default-features = false, features = [
     "persistence",   # Enable restoring app state when restarting the app.
 ] }
 log = "0.4"
-rustube = {version = "0.6.0", features = ["blocking"]}
 reqwest = { version = "0.11", features = ["blocking", "json"] }
 serde_json = "1.0.105"
 regex = "1.9.5"
@@ -27,10 +27,12 @@ unescape = "0.1.0"
 opener = {version = "0.6.1", features = ["reveal"]}
 open = "5.0.0"
 url = "2.4.1"
-rusty_ytdl = { git = "https://github.com/gempoint/rusty_ytdl" }
+rusty_ytdl = { git = "https://github.com/gempoint/rusty_ytdl", features = ["blocking"]}
+
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
 native-dialog = "0.6.4"
+cargo-bundle = "0.6.0"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -58,3 +60,18 @@ opt-level = 2
 # If you fork https://github.com/emilk/egui you can test with:
 # egui = { path = "../egui/crates/egui" }
 # eframe = { path = "../egui/crates/eframe" }
+
+[package.metadata.bundle]
+name = "psk"
+identifier = "com.i0x0.psk"
+icon = ["assets/icon.png"]
+version = "0.0.1"
+copyright = "Copyright (c) i0x0 2024. All rights reserved."
+category = "public.app-category.music"
+short_description = "a producer's swiss knife"
+long_description = """
+all it does is download stuff from youtube, tiktok, and instagram
+"""
+resources = ["libs"]
+deb_depends = ["ffmpeg"]
+osx_frameworks = ["ffmpeg"]
