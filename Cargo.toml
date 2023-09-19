@@ -32,7 +32,6 @@ rusty_ytdl = { git = "https://github.com/gempoint/rusty_ytdl", features = ["bloc
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
 native-dialog = "0.6.4"
-cargo-bundle = "0.6.0"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
